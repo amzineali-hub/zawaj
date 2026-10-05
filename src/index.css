@@ -1,0 +1,174 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-display: 'Cinzel', serif;
+    --font-serif: 'Cormorant Garamond', Georgia, serif;
+    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    --font-arabic-serif: 'Amiri', serif;
+    --font-arabic-sans: 'Cairo', system-ui, -apple-system, sans-serif;
+  }
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-serif {
+  font-family: var(--font-serif);
+}
+
+.font-sans {
+  font-family: var(--font-sans);
+}
+
+/* RTL / Arabic Typography overrides */
+[dir="rtl"] {
+  font-family: var(--font-arabic-sans);
+}
+
+[dir="rtl"] .font-display {
+  font-family: var(--font-arabic-serif);
+  letter-spacing: 0;
+}
+
+[dir="rtl"] .font-serif {
+  font-family: var(--font-arabic-serif);
+}
+
+/* Luxury gradients */
+.text-gold-gradient {
+  background: linear-gradient(135deg, #fff3cf 0%, #d4af37 45%, #b38728 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-rose-gold {
+  background: linear-gradient(135deg, #fde2e4 0%, #f472b6 40%, #e09f67 80%, #d4af37 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.bg-radial-prestige {
+  background: radial-gradient(circle at 50% 0%, rgba(212, 175, 55, 0.12) 0%, rgba(244, 114, 182, 0.06) 35%, transparent 70%);
+}
+
+.gold-glow {
+  box-shadow: 0 0 35px -5px rgba(212, 175, 55, 0.25);
+}
+
+.rose-glow {
+  box-shadow: 0 0 30px -5px rgba(244, 114, 182, 0.2);
+}
+
+/* Custom scrollbars for chat and feeds */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(20, 15, 18, 0.4);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(212, 175, 55, 0.25);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(212, 175, 55, 0.45);
+}
+
+/* Floating Avatars Animation from Bottom to Top */
+@keyframes floatUpwards {
+  0% {
+    transform: translateY(108vh) scale(0.7) rotate(0deg);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+    transform: translateY(92vh) scale(0.95) rotate(-2deg);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(48vh) scale(1) rotate(2.5deg);
+  }
+  85% {
+    opacity: 1;
+    transform: translateY(12vh) scale(0.95) rotate(-2deg);
+  }
+  100% {
+    transform: translateY(-28vh) scale(0.8) rotate(3deg);
+    opacity: 0;
+  }
+}
+
+.animate-float-up {
+  animation: floatUpwards linear forwards;
+}
+
+/* Gentle Heart Explosion Animations (Micro-interaction) */
+@keyframes heartPop {
+  0% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.42) rotate(-8deg);
+  }
+  50% {
+    transform: scale(0.92) rotate(5deg);
+  }
+  75% {
+    transform: scale(1.18) rotate(-3deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.animate-heart-pop {
+  animation: heartPop 0.65s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes heartRingBurst {
+  0% {
+    transform: scale(0.5);
+    opacity: 0.95;
+    box-shadow: 0 0 0 0 rgba(244, 114, 182, 0.75);
+  }
+  60% {
+    opacity: 0.6;
+    box-shadow: 0 0 0 16px rgba(244, 114, 182, 0.3);
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+    box-shadow: 0 0 0 28px rgba(244, 114, 182, 0);
+  }
+}
+
+.animate-heart-ring {
+  animation: heartRingBurst 0.75s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+@keyframes heartParticleBurst {
+  0% {
+    transform: translate(0, 0) scale(0.3) rotate(0deg);
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.95;
+    transform: translate(var(--tx, 0px), var(--ty, -24px)) scale(1.15) rotate(var(--rot, 15deg));
+  }
+  100% {
+    transform: translate(calc(var(--tx, 0px) * 1.38), calc(var(--ty, -24px) * 1.38)) scale(0.15) rotate(calc(var(--rot, 15deg) * 1.6));
+    opacity: 0;
+  }
+}
+
+.animate-heart-particle {
+  animation: heartParticleBurst 0.75s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+
