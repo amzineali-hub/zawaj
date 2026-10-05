@@ -1,0 +1,6 @@
+{
+  "name": "Mithaq Prestige - Rencontres Matrimoniales Séries",
+  "description": "Plateforme matrimoniale haut de gamme exclusivement dédiée aux Marocains et Marocains du Monde (MRE) | خاص بالمغاربة في العالم, avec double vérification d'identité, filtrage par centres d'intérêt et messagerie confidentielle.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
