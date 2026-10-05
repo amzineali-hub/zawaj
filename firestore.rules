@@ -1,0 +1,149 @@
+rules_version = '2';
+
+// Mithaq Prestige — règles Firestore (phase 1 : inscription + quota atomique)
+// Tout est refusé par défaut. Le client ne décide jamais d'un statut, d'un plan
+// ni d'un numéro de pionnier : les règles les imposent.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function phoneVerified() {
+      return signedIn() && request.auth.token.firebase.sign_in_provider == 'phone';
+    }
+
+    function quotaPath() {
+      return /databases/$(database)/documents/meta/quota;
+    }
+
+    function userPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    // Compteur du genre : 'men' ou 'women'
+    function quotaField(gender) {
+      return gender == 'homme' ? 'men' : 'women';
+    }
+
+    function quotaBefore(field) {
+      return exists(quotaPath()) ? get(quotaPath()).data[field] : 0;
+    }
+
+    // ---------- compteur de quota (places gratuites) ----------
+    // Lecture publique (affichée dans la bannière). Écriture uniquement
+    // dans la même transaction que la création du profil pionnier.
+    match /meta/quota {
+      allow read: if true;
+
+      allow create: if phoneVerified()
+        && request.resource.data.keys().hasOnly(['men', 'women'])
+        && request.resource.data.men is int
+        && request.resource.data.women is int
+        && !exists(userPath(request.auth.uid))
+        && existsAfter(userPath(request.auth.uid))
+        && getAfter(userPath(request.auth.uid)).data.plan == 'pioneer'
+        && (
+          (getAfter(userPath(request.auth.uid)).data.gender == 'homme'
+            && request.resource.data.men == 1 && request.resource.data.women == 0)
+          ||
+          (getAfter(userPath(request.auth.uid)).data.gender == 'femme'
+            && request.resource.data.women == 1 && request.resource.data.men == 0)
+        );
+
+      allow update: if phoneVerified()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['men', 'women'])
+        && !exists(userPath(request.auth.uid))
+        && existsAfter(userPath(request.auth.uid))
+        && getAfter(userPath(request.auth.uid)).data.plan == 'pioneer'
+        && (
+          (getAfter(userPath(request.auth.uid)).data.gender == 'homme'
+            && request.resource.data.men == resource.data.men + 1
+            && request.resource.data.men <= 100
+            && request.resource.data.women == resource.data.women)
+          ||
+          (getAfter(userPath(request.auth.uid)).data.gender == 'femme'
+            && request.resource.data.women == resource.data.women + 1
+            && request.resource.data.women <= 100
+            && request.resource.data.men == resource.data.men)
+        );
+
+      allow delete: if false;
+    }
+
+    // ---------- profils des membres ----------
+    match /users/{uid} {
+      // Les profils sont visibles par les membres connectés (affinés en phase 2).
+      allow read: if signedIn();
+
+      allow create: if phoneVerified()
+        && uid == request.auth.uid
+        && validNewUser(request.resource.data, uid)
+        && (
+          request.resource.data.plan == 'pioneer'
+            // pionnier : le compteur doit avancer d'exactement 1 dans la même transaction
+            ? (getAfter(quotaPath()).data[quotaField(request.resource.data.gender)]
+                  == quotaBefore(quotaField(request.resource.data.gender)) + 1
+               && getAfter(quotaPath()).data[quotaField(request.resource.data.gender)] <= 100
+               && request.resource.data.pioneerNumber
+                  == getAfter(quotaPath()).data[quotaField(request.resource.data.gender)])
+            // payant : seulement si les 100 places du genre sont déjà prises
+            : (exists(quotaPath())
+               && get(quotaPath()).data[quotaField(request.resource.data.gender)] >= 100
+               && !('pioneerNumber' in request.resource.data))
+        );
+
+      // Le propriétaire modifie son profil, jamais les champs protégés.
+      allow update: if signedIn() && uid == request.auth.uid
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'uid', 'id', 'gender', 'status', 'plan', 'pioneerNumber',
+          'isVerifiedId', 'isVerifiedPhone', 'isVerifiedHonorPledge',
+          'verifiedBadgeDate', 'createdAt', 'memberSince'
+        ]);
+
+      // Droit à la suppression des données (loi 09-08).
+      allow delete: if signedIn() && uid == request.auth.uid;
+    }
+
+    function validNewUser(d, uid) {
+      return d.keys().hasOnly([
+          'uid', 'id', 'fullName', 'age', 'gender', 'city', 'country', 'profession',
+          'industry', 'education', 'maritalStatus', 'heightCm', 'children', 'bio',
+          'marriageVision', 'lifestyle', 'religiousPractice', 'interests', 'photoUrl',
+          'isPhotoBlurred', 'isVerifiedId', 'isVerifiedPhone', 'isVerifiedHonorPledge',
+          'familyStageReady', 'verifiedBadgeDate', 'pioneerNumber', 'memberSince',
+          'waliContactAvailable', 'status', 'plan', 'createdAt'
+        ])
+        && d.keys().hasAll([
+          'uid', 'id', 'fullName', 'age', 'gender', 'city', 'country', 'status', 'plan',
+          'isVerifiedId', 'isVerifiedPhone', 'createdAt'
+        ])
+        && d.uid == uid
+        && d.id == uid
+        && d.fullName is string && d.fullName.size() >= 2 && d.fullName.size() <= 80
+        && d.age is int && d.age >= 18 && d.age <= 99
+        && d.gender in ['homme', 'femme']
+        && d.city is string && d.city.size() <= 80
+        && d.country is string && d.country.size() <= 80
+        && (!('bio' in d) || (d.bio is string && d.bio.size() <= 1500))
+        && (!('marriageVision' in d) || (d.marriageVision is string && d.marriageVision.size() <= 1500))
+        && (!('lifestyle' in d) || (d.lifestyle is string && d.lifestyle.size() <= 1500))
+        && (!('interests' in d) || (d.interests is list && d.interests.size() <= 5))
+        && d.status == 'phone_verified'
+        && d.plan in ['pioneer', 'none']
+        // jamais de badge d'identité à l'inscription : réservé à la validation admin (phase 3)
+        && d.isVerifiedId == false
+        && d.isVerifiedPhone == true
+        && (!('isVerifiedHonorPledge' in d) || d.isVerifiedHonorPledge is bool)
+        && d.createdAt == request.time;
+    }
+
+    // Tout le reste est interdit.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -3,6 +3,8 @@ import { X, ShieldCheck, Smartphone, CheckCircle2, AlertCircle, ArrowRight, Uplo
 import confetti from 'canvas-confetti';
 import { Gender, UserProfile, EducationLevel, MaritalStatus } from '../types';
 import { ALL_INTERESTS, CITIES_LIST, COUNTRIES_MRE, CITIES_BY_COUNTRY, PROFESSIONS_LIST } from '../data/mockProfiles';
+import { sendOtp, confirmOtp, OtpError, toMoroccanE164 } from '../services/auth';
+import { registerMember, RegisterError } from '../services/registration';
 import { Translations, Language, CITIES_ARABIC, INTERESTS_ARABIC, EDUCATION_ARABIC, MARITAL_STATUS_ARABIC, COUNTRIES_ARABIC, PROFESSIONS_ARABIC } from '../i18n/translations';
 
 interface VerificationModalProps {
@@ -46,21 +48,21 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
 
   // Step 2: Phone Verification State - STRICTLY LOCKED TO +212 (Morocco only)
   const countryCode = '+212';
-  const [phoneNumber, setPhoneNumber] = useState('661234567');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [phoneError, setPhoneError] = useState('');
   const [otpCode, setOtpCode] = useState('');
-  const [generatedCode, setGeneratedCode] = useState<string | null>(null);
   const [isSendingSms, setIsSendingSms] = useState(false);
   const [smsSent, setSmsSent] = useState(false);
   const [otpError, setOtpError] = useState('');
 
   // Step 3: Solemn Honor Pledge & Matrimonial Declaration (No CIN demanded at registration)
-  const [pledgeInfoAccuracy, setPledgeInfoAccuracy] = useState(true);
-  const [pledgeExclusiveMarriage, setPledgeExclusiveMarriage] = useState(true);
-  const [pledgeFamilyCINReady, setPledgeFamilyCINReady] = useState(true);
-  const [isScanningId, setIsScanningId] = useState(false);
-  const [scanProgress, setScanProgress] = useState(0);
-  const [idVerified, setIdVerified] = useState(false);
+  const [pledgeInfoAccuracy, setPledgeInfoAccuracy] = useState(false);
+  const [pledgeExclusiveMarriage, setPledgeExclusiveMarriage] = useState(false);
+  const [pledgeFamilyCINReady, setPledgeFamilyCINReady] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [isPioneerResult, setIsPioneerResult] = useState<boolean | null>(null);
+  const allPledged = pledgeInfoAccuracy && pledgeExclusiveMarriage && pledgeFamilyCINReady;
 
   if (!isOpen) return null;
 
@@ -82,101 +84,106 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
     }
   };
 
-  const handleSendSms = () => {
-    // Validate Moroccan phone number:
-    // Strip non-digits and leading zero (e.g. 0661234567 -> 661234567)
-    const cleanNum = phoneNumber.replace(/\D/g, '').replace(/^0/, '');
-    if (!cleanNum || cleanNum.length !== 9 || (!cleanNum.startsWith('6') && !cleanNum.startsWith('7'))) {
+  const otpErrorText = (e: unknown): string => {
+    const code = e instanceof OtpError ? e.code : 'unknown';
+    if (code === 'invalid-phone') return t.invalidMoroccanPhone;
+    if (code === 'invalid-code') return t.invalidOtpError;
+    if (code === 'code-expired') return lang === 'ar' ? 'انتهت صلاحية الرمز، أعد الإرسال.' : 'Code expiré, veuillez le renvoyer.';
+    if (code === 'too-many-requests') return lang === 'ar' ? 'محاولات كثيرة، أعد المحاولة لاحقاً.' : 'Trop de tentatives, réessayez plus tard.';
+    if (code === 'no-session') return lang === 'ar' ? 'أرسل الرمز أولاً.' : "Envoyez d'abord le code par SMS.";
+    return lang === 'ar' ? 'حدث خطأ، أعد المحاولة.' : 'Une erreur est survenue, veuillez réessayer.';
+  };
+
+  const handleSendSms = async () => {
+    if (!toMoroccanE164(phoneNumber)) {
       setPhoneError(t.invalidMoroccanPhone);
       return;
     }
     setPhoneError('');
-    setIsSendingSms(true);
     setOtpError('');
-    setTimeout(() => {
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-      setGeneratedCode(code);
-      setIsSendingSms(false);
+    setIsSendingSms(true);
+    try {
+      await sendOtp(phoneNumber, 'recaptcha-container');
       setSmsSent(true);
-    }, 900);
+    } catch (e) {
+      setPhoneError(otpErrorText(e));
+    } finally {
+      setIsSendingSms(false);
+    }
   };
 
-  const handleVerifyOtp = (e: React.FormEvent) => {
+  const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!otpCode || otpCode.length !== 6) {
       setOtpError(t.enter6DigitLabel);
       return;
     }
-    if (generatedCode && otpCode !== generatedCode && otpCode !== '123456') {
-      setOtpError(t.invalidOtpError);
-      return;
-    }
     setOtpError('');
-    setStep(3);
-  };
-
-  const handleSimulateIdScan = () => {
-    setIsScanningId(true);
-    setScanProgress(10);
-    const interval = setInterval(() => {
-      setScanProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setIsScanningId(false);
-          setIdVerified(true);
-          return 100;
-        }
-        return prev + 25;
-      });
-    }, 400);
+    try {
+      await confirmOtp(otpCode);
+      setStep(3);
+    } catch (err) {
+      setOtpError(otpErrorText(err));
+    }
   };
 
   const finalProfession = (profession === "Autre profession libérale / Spécialité" && customProfession.trim())
     ? customProfession.trim()
     : (lang === 'ar' ? (PROFESSIONS_ARABIC[profession] || profession) : profession);
 
-  const handleFinishRegistration = () => {
-    confetti({
-      particleCount: 100,
-      spread: 70,
-      origin: { y: 0.6 },
-      colors: ['#d4af37', '#f472b6', '#ffffff', '#eab308']
-    });
+  const handleFinishRegistration = async () => {
+    if (isSubmitting || !allPledged) return;
+    setSubmitError('');
+    setIsSubmitting(true);
+    try {
+      const member = await registerMember({
+        fullName: fullName.trim(),
+        age: Number(age),
+        gender,
+        city,
+        country: lang === 'ar' ? (COUNTRIES_ARABIC[country] || country) : country,
+        profession: finalProfession,
+        industry: lang === 'ar' ? 'إطارات وكفاءات مغربية' : 'Cadres & Professions Libérales',
+        education,
+        maritalStatus,
+        heightCm: gender === 'femme' ? 168 : 180,
+        children: maritalStatus.includes('avec enfant') ? 1 : 0,
+        bio: bio || (lang === 'ar' ? 'إنسان ذو خلق ودين، محب للسكينة، حريص على إقامة بيت مبارك مبني على التقوى والوئام.' : 'Personne bienveillante, attachée aux traditions d’honneur, à la loyauté et à l’entente spirituelle.'),
+        marriageVision: marriageVision || (lang === 'ar' ? 'بناء أسرة متماسكة قوامها التفاهم والصدق والرحمة المتبادلة.' : 'Fonder un foyer harmonieux bâti sur la communication, le respect mutuel et l’amour authentique.'),
+        lifestyle: lifestyle || (lang === 'ar' ? 'حياة هادئة تجمع بين الالتزام الروحي، العمل المنتج، والاهتمام بالأسرة.' : 'Vie sereine, équilibre entre spiritualité, travail et moments familiaux.'),
+        religiousPractice: lang === 'ar' ? 'ملتزم(ة) بصلاح واعتدال' : 'Pratiquant(e) sincère et équilibré(e)',
+        interests: selectedInterests.length > 0 ? selectedInterests : ['Littérature & Poésie', 'Voyages culturels'],
+        photoUrl: photoUrl || (gender === 'femme'
+          ? 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=600&q=80'
+          : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80'),
+        isPhotoBlurred,
+        isVerifiedHonorPledge: true,
+        memberSince: lang === 'ar' ? 'أكتوبر 2026' : 'Octobre 2026',
+        waliContactAvailable: hasWali
+      });
 
-    const newProfile: UserProfile = {
-      id: `prof-user-${Date.now()}`,
-      fullName: fullName || (gender === 'femme' ? (lang === 'ar' ? 'أمينة البناني' : 'Amina Bennani') : (lang === 'ar' ? 'كريم الفاسي' : 'Karim El Fassi')),
-      age: Number(age) || 28,
-      gender,
-      city,
-      country: lang === 'ar' ? (COUNTRIES_ARABIC[country] || country) : country,
-      profession: finalProfession,
-      industry: lang === 'ar' ? 'إطارات وكفاءات مغربية' : 'Cadres & Professions Libérales',
-      education,
-      maritalStatus,
-      heightCm: gender === 'femme' ? 168 : 180,
-      children: maritalStatus.includes('avec enfant') ? 1 : 0,
-      bio: bio || (lang === 'ar' ? 'إنسان ذو خلق ودين، محب للسكينة، حريص على إقامة بيت مبارك مبني على التقوى والوئام.' : 'Personne bienveillante, attachée aux traditions d’honneur, à la loyauté et à l’entente spirituelle.'),
-      marriageVision: marriageVision || (lang === 'ar' ? 'بناء أسرة متماسكة قوامها التفاهم والصدق والرحمة المتبادلة.' : 'Fonder un foyer harmonieux bâti sur la communication, le respect mutuel et l’amour authentique.'),
-      lifestyle: lifestyle || (lang === 'ar' ? 'حياة هادئة تجمع بين الالتزام الروحي، العمل المنتج، والاهتمام بالأسرة.' : 'Vie sereine, équilibre entre spiritualité, travail et moments familiaux.'),
-      religiousPractice: lang === 'ar' ? 'ملتزم(ة) بصلاح واعتدال' : 'Pratiquant(e) sincère et équilibré(e)',
-      interests: selectedInterests.length > 0 ? selectedInterests : ['Littérature & Poésie', 'Voyages culturels'],
-      photoUrl: photoUrl || (gender === 'femme' 
-        ? 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=600&q=80'
-        : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80'),
-      isPhotoBlurred,
-      isVerifiedId: true,
-      isVerifiedPhone: true,
-      verifiedBadgeDate: lang === 'ar' ? 'اليوم' : "Aujourd'hui",
-      pioneerNumber: isEligibleForFreePioneer 
-        ? (gender === 'femme' ? 100 - womenRemaining + 1 : 100 - menRemaining + 1)
-        : undefined,
-      memberSince: lang === 'ar' ? 'أكتوبر 2026' : 'Octobre 2026',
-      waliContactAvailable: hasWali
-    };
-
-    onVerificationComplete(newProfile, isEligibleForFreePioneer);
-    setStep(4);
+      const pioneer = member.pioneerNumber !== undefined;
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#d4af37', '#f472b6', '#ffffff', '#eab308']
+      });
+      setIsPioneerResult(pioneer);
+      onVerificationComplete(member, pioneer);
+      setStep(4);
+    } catch (err) {
+      const code = err instanceof RegisterError ? err.code : 'unknown';
+      setSubmitError(
+        code === 'already-registered'
+          ? (lang === 'ar' ? 'هذا الرقم مسجل بالفعل.' : 'Ce numéro est déjà inscrit.')
+          : code === 'not-signed-in'
+            ? (lang === 'ar' ? 'انتهت الجلسة، أعد التحقق من الهاتف.' : 'Session expirée, veuillez revérifier votre téléphone.')
+            : (lang === 'ar' ? 'تعذر إنشاء الحساب، أعد المحاولة.' : 'Impossible de créer le compte, veuillez réessayer.')
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -490,7 +497,8 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setStep(2)}
-                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#fce0a2] via-[#d4af37] to-[#b38728] text-xs font-semibold text-[#160d13] flex items-center gap-2 cursor-pointer shadow-md shadow-[#d4af37]/20"
+                  disabled={fullName.trim().length < 2}
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#fce0a2] via-[#d4af37] to-[#b38728] text-xs font-semibold text-[#160d13] flex items-center gap-2 cursor-pointer shadow-md shadow-[#d4af37]/20 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <span>{t.nextStepPhoneBtn}</span>
                   <ArrowRight className="w-3.5 h-3.5 rtl:rotate-180" />
@@ -572,29 +580,8 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
                 )}
               </div>
 
-              {/* Simulated SMS Notification Banner */}
-              {smsSent && generatedCode && (
-                <div className="p-3.5 rounded-xl bg-gradient-to-r from-emerald-950/60 to-emerald-900/40 border border-emerald-500/40 animate-fadeIn">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                      <span className="text-xs font-semibold text-emerald-300">
-                        {t.smsReceivedFrom}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setOtpCode(generatedCode)}
-                      className="text-[11px] text-emerald-200 underline font-medium cursor-pointer"
-                    >
-                      {t.copyCodeBtn}
-                    </button>
-                  </div>
-                  <p className="mt-1 text-xs text-emerald-100 font-mono">
-                    « {t.smsMessageText} <strong className="text-white text-sm tracking-widest">{generatedCode}</strong> »
-                  </p>
-                </div>
-              )}
+              {/* reCAPTCHA invisible (requis par Firebase Phone Auth) */}
+              <div id="recaptcha-container" />
 
               {/* OTP Input Form */}
               <form onSubmit={handleVerifyOtp} className="space-y-4">
@@ -712,47 +699,18 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
                 </label>
               </div>
 
-              {/* Seal Stamp / Interactive Validation Area */}
-              <div className="border border-[#d4af37]/30 rounded-2xl p-4 text-center bg-[#20131b]/60">
-                {isScanningId ? (
-                  <div className="p-3 bg-black/50 rounded-xl border border-[#d4af37]/30">
-                    <div className="flex items-center justify-between text-xs text-[#d4af37] mb-1.5">
-                      <span className="flex items-center gap-1.5">
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        <span>{t.analyzingBiometrics}</span>
-                      </span>
-                      <span className="font-mono">{scanProgress}%</span>
-                    </div>
-                    <div className="w-full bg-zinc-800 h-2 rounded-full overflow-hidden">
-                      <div 
-                        className="bg-gradient-to-r from-[#d4af37] to-emerald-400 h-full transition-all duration-300"
-                        style={{ width: `${scanProgress}%` }}
-                      />
-                    </div>
-                  </div>
-                ) : idVerified ? (
-                  <div className="p-3.5 bg-emerald-950/40 rounded-xl border border-emerald-500/40 flex items-center justify-center gap-2.5 text-xs text-emerald-300 animate-fadeIn">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span className="font-medium">{t.idVerifiedSuccess}</span>
-                  </div>
-                ) : (
-                  <div>
-                    <button
-                      type="button"
-                      onClick={handleSimulateIdScan}
-                      disabled={!pledgeInfoAccuracy || !pledgeExclusiveMarriage || !pledgeFamilyCINReady}
-                      className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#d4af37]/30 to-[#aa771c]/30 border border-[#d4af37]/60 text-xs font-semibold text-[#fce0a2] hover:bg-[#d4af37]/40 transition-colors cursor-pointer disabled:opacity-40"
-                    >
-                      {t.startComplianceAuditBtn}
-                    </button>
-                    {(!pledgeInfoAccuracy || !pledgeExclusiveMarriage || !pledgeFamilyCINReady) && (
-                      <p className="text-[11px] text-zinc-400 mt-2">
-                        {lang === 'ar' ? 'يرجى الموافقة على جميع بنود ميثاق الشرف أعلاه للتأكيد' : 'Veuillez cocher les trois engagements solennels ci-dessus pour valider.'}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
+              {!allPledged && (
+                <p className="text-[11px] text-zinc-400 text-center">
+                  {lang === 'ar' ? 'يرجى الموافقة على جميع بنود ميثاق الشرف أعلاه للتأكيد' : 'Veuillez cocher les trois engagements solennels ci-dessus pour valider.'}
+                </p>
+              )}
+
+              {submitError && (
+                <p className="text-xs text-rose-400 flex items-center justify-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>{submitError}</span>
+                </p>
+              )}
 
               <div className="flex items-center justify-between pt-2">
                 <button
@@ -766,10 +724,10 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
                 <button
                   type="button"
                   onClick={handleFinishRegistration}
-                  disabled={!idVerified || isScanningId}
+                  disabled={!allPledged || isSubmitting}
                   className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#fce0a2] via-[#d4af37] to-[#b38728] text-xs font-semibold text-[#160d13] flex items-center gap-2 cursor-pointer shadow-md shadow-[#d4af37]/20 disabled:opacity-50"
                 >
-                  <Sparkles className="w-4 h-4 text-[#160d13]" />
+                  {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin text-[#160d13]" /> : <Sparkles className="w-4 h-4 text-[#160d13]" />}
                   <span>{t.finishRegistrationBtn}</span>
                 </button>
               </div>
@@ -784,11 +742,11 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
               </div>
 
               <h3 className="text-xl sm:text-2xl font-serif font-bold text-[#fff8f0]">
-                {isEligibleForFreePioneer ? t.pioneerCongratsTitle : t.certifiedSuccessTitle}
+                {(isPioneerResult ?? isEligibleForFreePioneer) ? t.pioneerCongratsTitle : t.certifiedSuccessTitle}
               </h3>
 
               <p className="text-xs sm:text-sm text-[#d6c4c9] max-w-md mx-auto leading-relaxed">
-                {isEligibleForFreePioneer ? t.pioneerCongratsDesc : t.certifiedSuccessDesc}
+                {(isPioneerResult ?? isEligibleForFreePioneer) ? t.pioneerCongratsDesc : t.certifiedSuccessDesc}
               </p>
 
               <div className="p-4 rounded-2xl bg-[#20131b] border border-[#d4af37]/30 max-w-sm mx-auto text-left rtl:text-right text-xs space-y-2">
@@ -816,7 +774,7 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-zinc-400">{t.appliedFee}</span>
-                  <span className="text-[#d4af37] font-semibold">{isEligibleForFreePioneer ? t.freeFeePioneer : '100 DH / an'}</span>
+                  <span className="text-[#d4af37] font-semibold">{(isPioneerResult ?? isEligibleForFreePioneer) ? t.freeFeePioneer : '100 DH / an'}</span>
                 </div>
               </div>
 

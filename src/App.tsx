@@ -24,6 +24,9 @@ import { MobileAppModal } from './components/MobileAppModal';
 import { ReportModal } from './components/ReportModal';
 import { BottomNav } from './components/BottomNav';
 import { FloatingProfilesWelcome } from './components/FloatingProfilesWelcome';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from './firebase';
+import { subscribeQuota, loadMember, QUOTA_MAX } from './services/registration';
 
 export default function App() {
   // Language State with persistence in localStorage and HTML dir attribute
@@ -124,12 +127,35 @@ export default function App() {
   
   // Pioneer Quota State (100 Hommes & 100 Femmes Gratuits, puis 100 DH/an)
   const [pioneerStats, setPioneerStats] = useState<PioneerStats>({
-    menRegistered: 74,
-    menMax: 100,
-    womenRegistered: 68,
-    womenMax: 100,
+    menRegistered: 0,
+    menMax: QUOTA_MAX,
+    womenRegistered: 0,
+    womenMax: QUOTA_MAX,
     annualFeeDH: 100
   });
+
+  // Compteurs réels des places gratuites (Firestore, temps réel)
+  useEffect(() => {
+    return subscribeQuota((q) =>
+      setPioneerStats((prev) => ({ ...prev, menRegistered: q.men, womenRegistered: q.women }))
+    );
+  }, []);
+
+  // Restauration de la session : un membre déjà inscrit retrouve son profil
+  useEffect(() => {
+    return onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setCurrentUser(null);
+        return;
+      }
+      try {
+        const member = await loadMember(user.uid);
+        if (member) setCurrentUser(member);
+      } catch {
+        // hors-ligne ou règles : l'utilisateur reste visiteur
+      }
+    });
+  }, []);
 
   // Filter State
   const [filters, setFilters] = useState<FilterState>({
@@ -319,22 +345,9 @@ export default function App() {
   };
 
   const handleVerificationComplete = (newProfile: UserProfile, isFreePioneer: boolean) => {
+    // Les compteurs viennent de Firestore (abonnement temps réel) : pas d'incrément local.
     setCurrentUser(newProfile);
     setProfiles([newProfile, ...profiles]);
-
-    if (isFreePioneer) {
-      if (newProfile.gender === 'femme') {
-        setPioneerStats(prev => ({
-          ...prev,
-          womenRegistered: Math.min(prev.womenMax, prev.womenRegistered + 1)
-        }));
-      } else {
-        setPioneerStats(prev => ({
-          ...prev,
-          menRegistered: Math.min(prev.menMax, prev.menRegistered + 1)
-        }));
-      }
-    }
   };
 
   const totalUnreadMessages = conversations.reduce((acc, c) => acc + c.unreadCount, 0);
