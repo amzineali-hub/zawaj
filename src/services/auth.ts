@@ -15,7 +15,8 @@ export type OtpErrorCode =
   | 'unknown';
 
 export class OtpError extends Error {
-  constructor(public code: OtpErrorCode) {
+  /** `detail` : code Firebase d'origine (ex. auth/billing-not-enabled), pour le diagnostic. */
+  constructor(public code: OtpErrorCode, public detail?: string) {
     super(code);
   }
 }
@@ -37,13 +38,14 @@ function resetRecaptcha() {
 
 function mapError(e: unknown): OtpError {
   const code = (e as { code?: string })?.code ?? '';
+  console.error('[auth] erreur Firebase :', e);
   if (code === 'auth/invalid-phone-number') return new OtpError('invalid-phone');
   if (code === 'auth/too-many-requests' || code === 'auth/quota-exceeded') {
     return new OtpError('too-many-requests');
   }
   if (code === 'auth/invalid-verification-code') return new OtpError('invalid-code');
   if (code === 'auth/code-expired') return new OtpError('code-expired');
-  return new OtpError('unknown');
+  return new OtpError('unknown', code || String((e as Error)?.message ?? e));
 }
 
 /** Envoie le SMS. `containerId` : id d'un élément du DOM qui accueille le reCAPTCHA invisible. */

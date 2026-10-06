@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { X, ShieldCheck, Smartphone, CheckCircle2, AlertCircle, ArrowRight, Upload, Sparkles, RefreshCw, KeyRound, Lock, MapPin, Briefcase, Calendar } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Gender, UserProfile, EducationLevel, MaritalStatus } from '../types';
@@ -54,6 +54,8 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
   const [isSendingSms, setIsSendingSms] = useState(false);
   const [smsSent, setSmsSent] = useState(false);
   const [otpError, setOtpError] = useState('');
+  const [resendIn, setResendIn] = useState(0);
+  const otpInputRef = useRef<HTMLInputElement>(null);
 
   // Step 3: Solemn Honor Pledge & Matrimonial Declaration (No CIN demanded at registration)
   const [pledgeInfoAccuracy, setPledgeInfoAccuracy] = useState(false);
@@ -63,6 +65,13 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
   const [submitError, setSubmitError] = useState('');
   const [isPioneerResult, setIsPioneerResult] = useState<boolean | null>(null);
   const allPledged = pledgeInfoAccuracy && pledgeExclusiveMarriage && pledgeFamilyCINReady;
+
+  // Compte à rebours avant de pouvoir renvoyer le code
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const timer = setTimeout(() => setResendIn((n) => n - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendIn]);
 
   if (!isOpen) return null;
 
@@ -91,7 +100,8 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
     if (code === 'code-expired') return lang === 'ar' ? 'انتهت صلاحية الرمز، أعد الإرسال.' : 'Code expiré, veuillez le renvoyer.';
     if (code === 'too-many-requests') return lang === 'ar' ? 'محاولات كثيرة، أعد المحاولة لاحقاً.' : 'Trop de tentatives, réessayez plus tard.';
     if (code === 'no-session') return lang === 'ar' ? 'أرسل الرمز أولاً.' : "Envoyez d'abord le code par SMS.";
-    return lang === 'ar' ? 'حدث خطأ، أعد المحاولة.' : 'Une erreur est survenue, veuillez réessayer.';
+    const base = lang === 'ar' ? 'حدث خطأ، أعد المحاولة.' : 'Une erreur est survenue, veuillez réessayer.';
+    return e instanceof OtpError && e.detail ? `${base} (${e.detail})` : base;
   };
 
   const handleSendSms = async () => {
@@ -105,6 +115,9 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
     try {
       await sendOtp(phoneNumber, 'recaptcha-container');
       setSmsSent(true);
+      setOtpCode('');
+      setResendIn(60);
+      setTimeout(() => otpInputRef.current?.focus(), 50);
     } catch (e) {
       setPhoneError(otpErrorText(e));
     } finally {
@@ -537,9 +550,9 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
                 <label className="block text-xs font-medium text-[#d6c4c9] mb-1.5">
                   {t.phoneLabel}
                 </label>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap sm:flex-nowrap gap-2">
                   {/* Fixed Moroccan Prefix (+212) */}
-                  <div className="px-3.5 py-2.5 rounded-xl bg-[#1c0f18] border border-[#d4af37]/40 text-xs text-[#fce0a2] font-semibold flex items-center gap-1.5 shrink-0 select-none shadow-inner">
+                  <div className="px-2.5 sm:px-3.5 py-2.5 rounded-xl bg-[#1c0f18] border border-[#d4af37]/40 text-xs text-[#fce0a2] font-semibold flex items-center gap-1.5 shrink-0 select-none shadow-inner">
                     <span className="text-base leading-none">🇲🇦</span>
                     <span className="font-mono text-sm tracking-wide text-[#fce0a2]">+212</span>
                     <span className="hidden sm:inline-block text-[10px] px-1.5 py-0.5 rounded bg-[#d4af37]/20 text-[#d4af37] border border-[#d4af37]/30 font-medium">
@@ -554,28 +567,44 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
                     onChange={(e) => {
                       setPhoneNumber(e.target.value);
                       if (phoneError) setPhoneError('');
+                      if (smsSent) {
+                        setSmsSent(false);
+                        setResendIn(0);
+                        setOtpCode('');
+                        setOtpError('');
+                      }
                     }}
-                    className="flex-1 px-3.5 py-2.5 rounded-xl bg-[#20131b] border border-[#d4af37]/25 text-sm text-[#f8ede8] font-mono focus:outline-none focus:border-[#d4af37]"
+                    className="flex-1 min-w-[150px] px-3 sm:px-3.5 py-2.5 rounded-xl bg-[#20131b] border border-[#d4af37]/25 text-sm text-[#f8ede8] font-mono focus:outline-none focus:border-[#d4af37]"
                   />
 
                   <button
                     type="button"
                     onClick={handleSendSms}
-                    disabled={isSendingSms}
-                    className="px-4 py-2.5 rounded-xl bg-[#d4af37]/20 border border-[#d4af37]/50 hover:bg-[#d4af37]/30 text-xs font-semibold text-[#fce0a2] transition-colors cursor-pointer whitespace-nowrap flex items-center gap-1.5"
+                    disabled={isSendingSms || resendIn > 0}
+                    className="w-full sm:w-auto justify-center px-3 sm:px-4 py-2.5 rounded-xl bg-[#d4af37]/20 border border-[#d4af37]/50 hover:bg-[#d4af37]/30 text-xs font-semibold text-[#fce0a2] transition-colors cursor-pointer whitespace-nowrap flex items-center gap-1.5 shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {isSendingSms ? (
                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                     ) : (
                       <KeyRound className="w-3.5 h-3.5" />
                     )}
-                    <span>{smsSent ? t.resendCodeBtn : t.sendCodeBtn}</span>
+                    <span>{smsSent ? (resendIn > 0 ? `${t.resendCodeBtn} (${resendIn}s)` : t.resendCodeBtn) : t.sendCodeBtn}</span>
                   </button>
                 </div>
                 {phoneError && (
                   <p className="mt-1.5 text-xs text-rose-400 flex items-center gap-1">
                     <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                     <span>{phoneError}</span>
+                  </p>
+                )}
+                {smsSent && !phoneError && (
+                  <p className="mt-1.5 text-xs text-emerald-400 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                    <span>
+                      {lang === 'ar'
+                        ? `تم إرسال الرمز إلى ${toMoroccanE164(phoneNumber) ?? ''}. أدخله أدناه.`
+                        : `Code envoyé au ${toMoroccanE164(phoneNumber) ?? ''}. Saisissez-le ci-dessous.`}
+                    </span>
                   </p>
                 )}
               </div>
@@ -590,13 +619,24 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
                     {t.enter6DigitLabel}
                   </label>
                   <input
+                    ref={otpInputRef}
                     type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
                     maxLength={6}
                     placeholder="••••••"
                     value={otpCode}
+                    disabled={!smsSent}
                     onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                    className="w-full tracking-widest text-center text-xl font-mono py-2.5 rounded-xl bg-[#20131b] border border-[#d4af37]/40 text-[#fce0a2] focus:outline-none focus:border-[#d4af37]"
+                    className="w-full tracking-widest text-center text-xl font-mono py-2.5 rounded-xl bg-[#20131b] border border-[#d4af37]/40 text-[#fce0a2] focus:outline-none focus:border-[#d4af37] disabled:opacity-40 disabled:cursor-not-allowed"
                   />
+                  {!smsSent && (
+                    <p className="mt-1.5 text-[11px] text-zinc-400">
+                      {lang === 'ar'
+                        ? 'اضغط أولاً على «إرسال الرمز» لتتوصل برمز التحقق عبر الرسالة النصية.'
+                        : 'Cliquez d’abord sur « Envoyer Code » pour recevoir votre code par SMS.'}
+                    </p>
+                  )}
                   {otpError && (
                     <p className="mt-1.5 text-xs text-rose-400 flex items-center gap-1">
                       <AlertCircle className="w-3.5 h-3.5" />
@@ -616,7 +656,8 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
 
                   <button
                     type="submit"
-                    className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#fce0a2] via-[#d4af37] to-[#b38728] text-xs font-semibold text-[#160d13] flex items-center gap-2 cursor-pointer shadow-md shadow-[#d4af37]/20"
+                    disabled={!smsSent || otpCode.length !== 6}
+                    className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#fce0a2] via-[#d4af37] to-[#b38728] text-xs font-semibold text-[#160d13] flex items-center gap-2 cursor-pointer shadow-md shadow-[#d4af37]/20 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <span>{t.validatePhoneBtn}</span>
                     <ArrowRight className="w-3.5 h-3.5 rtl:rotate-180" />

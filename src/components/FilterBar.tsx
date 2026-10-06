@@ -368,7 +368,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 
       {/* Scope Selector Bar: Tout / Professions / Centres d'intérêt */}
       <div className="mt-3 pt-3 border-t border-[#d4af37]/15 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 text-xs text-[#d6c4c9]">
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-[#d6c4c9] min-w-0">
           <span className="text-[11px] font-serif text-[#d4af37] uppercase tracking-wider font-semibold">
             {t.searchByProfessionLabel} & {t.searchByInterestLabel} :
           </span>

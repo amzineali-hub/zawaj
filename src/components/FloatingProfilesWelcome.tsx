@@ -334,7 +334,7 @@ export const FloatingProfilesWelcome: React.FC<FloatingProfilesWelcomeProps> = (
       {/* Floating Foreground Welcoming Control Badge (Bottom-left/right) with Pointer-Events Auto */}
       <aside 
         aria-label="Welcome indicator"
-        className="absolute bottom-6 left-5 rtl:left-auto rtl:right-5 pointer-events-auto bg-[#1a0f16]/95 backdrop-blur-lg border border-[#d4af37]/60 rounded-2xl px-4 py-2.5 shadow-2xl shadow-black flex items-center gap-3 animate-fadeIn"
+        className="absolute bottom-20 xl:bottom-6 left-3 right-3 sm:right-auto sm:left-5 rtl:left-3 rtl:sm:left-auto rtl:sm:right-5 pointer-events-auto bg-[#1a0f16]/95 backdrop-blur-lg border border-[#d4af37]/60 rounded-2xl px-4 py-2.5 shadow-2xl shadow-black flex items-center gap-3 animate-fadeIn"
       >
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-[#d4af37] to-[#fce0a2] text-[#160d13] flex items-center justify-center shadow-md shadow-[#d4af37]/30 shrink-0">

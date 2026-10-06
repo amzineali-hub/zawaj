@@ -386,7 +386,7 @@ export default function App() {
       />
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 md:pb-12 space-y-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 xl:pb-12 space-y-8">
         
         {/* Editorial Hero Banner */}
         <section className="relative overflow-hidden rounded-3xl border border-[#d4af37]/30 bg-radial-prestige p-6 sm:p-10 lg:p-12 text-center lg:text-left rtl:lg:text-right flex flex-col lg:flex-row items-center justify-between gap-8">

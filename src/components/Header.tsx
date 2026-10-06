@@ -40,14 +40,14 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   return (
     <header className="sticky top-0 z-40 w-full border-b border-[#d4af37]/20 bg-[#120b0f]/90 backdrop-blur-md">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-16 py-1 flex items-center justify-between gap-3">
         
         {/* Zone 1: Wordmark with explicit Moroccan & Diaspora designation */}
         <button 
           onClick={() => {
             setActiveTab('profiles');
           }}
-          className="flex flex-col text-left rtl:text-right cursor-pointer group py-1"
+          className="flex flex-col min-w-0 text-left rtl:text-right cursor-pointer group py-1"
         >
           <div className="flex items-center gap-2">
             <span 
@@ -56,21 +56,18 @@ export const Header: React.FC<HeaderProps> = ({
             >
               {t.appName}
             </span>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#d4af37]/20 border border-[#d4af37]/40 text-[#fce0a2]">
+            <span className="hidden 2xl:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#d4af37]/20 border border-[#d4af37]/40 text-[#fce0a2]">
               <span className="text-xs leading-none">🇲🇦</span>
               <span className="truncate max-w-[140px] sm:max-w-none">{lang === 'ar' ? 'خاص بالمغاربة في العالم' : 'Pour les Marocains & MRE'}</span>
             </span>
           </div>
-          <span 
-            className="font-serif tracking-normal -mt-0.5"
-            style={{ fontWeight: 'bold', fontSize: '16px', color: '#f4e272' }}
-          >
+          <span className="font-serif font-bold tracking-normal -mt-0.5 text-[#f4e272] text-[10px] leading-tight sm:text-xs xl:text-[13px] 2xl:text-base truncate max-w-[200px] sm:max-w-[320px] xl:max-w-[280px] 2xl:max-w-none">
             {lang === 'ar' ? 'خاص بالمغاربة في العالم · ميثاق الزواج الشرعي' : 'Pour les Marocains et Marocains du Monde'}
           </span>
         </button>
 
         {/* Zone 2: 4-6 clean text navigation links */}
-        <nav className="hidden md:flex items-center gap-6 lg:gap-7 text-sm font-medium">
+        <nav className="hidden xl:flex items-center gap-4 2xl:gap-7 text-[13px] 2xl:text-sm font-medium">
           <button
             onClick={() => setActiveTab('profiles')}
             className={`transition-colors pb-1 cursor-pointer whitespace-nowrap ${
@@ -141,7 +138,7 @@ export const Header: React.FC<HeaderProps> = ({
         </nav>
 
         {/* Zone 3: Primary actions & Language Switcher */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
           
           {/* Language Switcher button (Arabic <-> French) */}
           <button
@@ -168,10 +165,11 @@ export const Header: React.FC<HeaderProps> = ({
           ) : (
             <button
               onClick={onOpenVerification}
+              aria-label={t.verifyProfileBtn}
               className="px-3 sm:px-4 py-2 rounded-lg text-xs font-semibold text-[#180f14] bg-gradient-to-r from-[#f7dfa5] via-[#d4af37] to-[#b38728] hover:from-[#fcecc0] hover:to-[#c69a35] transition-all shadow-md shadow-[#d4af37]/15 whitespace-nowrap cursor-pointer flex items-center gap-1.5"
             >
               <ShieldCheck className="w-4 h-4 text-[#1a0f15]" />
-              <span>{t.verifyProfileBtn}</span>
+              <span className="hidden sm:inline">{t.verifyProfileBtn}</span>
             </button>
           )}
         </div>

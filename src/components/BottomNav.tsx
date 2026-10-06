@@ -24,7 +24,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   lang
 }) => {
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#140c11]/95 backdrop-blur-md border-t border-[#d4af37]/20 px-1 py-1">
+    <nav className="xl:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#140c11]/95 backdrop-blur-md border-t border-[#d4af37]/20 px-1 py-1">
       <div className="grid grid-cols-5 items-center h-14 max-w-md mx-auto">
         
         {/* Tab 1: Profils */}
